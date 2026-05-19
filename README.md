@@ -19,6 +19,98 @@ This repository is a flat monorepo of standalone `SKILL.md` packages. Every skil
 
 Each package preserves the skill's instructions and supporting files such as scripts, references, examples, workflows, tests, templates, and assets.
 
+## AI Agent Install Guide
+
+Use this repository when your agent expects a flat directory of independent skills. This is the cleanest install target for runtimes that do not understand categories.
+
+### 1. Clone
+
+```bash
+git clone https://github.com/TeddyJubu/mad-scientist-skill-monorepo.git
+cd mad-scientist-skill-monorepo
+```
+
+### 2. Validate Before Loading
+
+```bash
+test "$(find packages -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')" = "204"
+test "$(find packages -mindepth 2 -maxdepth 2 -name SKILL.md | wc -l | tr -d ' ')" = "204"
+test "$(find packages -name SKILL.md | wc -l | tr -d ' ')" = "204"
+
+python3 - <<'PY'
+from pathlib import Path
+import json, re
+names = set()
+bad = []
+for package_dir in Path("packages").iterdir():
+    if not package_dir.is_dir():
+        continue
+    skill = package_dir / "SKILL.md"
+    manifest = package_dir / "package.json"
+    if not skill.exists() or not manifest.exists():
+        bad.append(str(package_dir))
+        continue
+    data = json.loads(manifest.read_text())
+    package_name = data.get("name", "")
+    if not re.fullmatch(r"@mad-scientist-skills/[a-z0-9][a-z0-9-]*", package_name):
+        bad.append(f"bad package name: {manifest}")
+    if package_name in names:
+        bad.append(f"duplicate package: {package_name}")
+    names.add(package_name)
+    text = skill.read_text(errors="replace")
+    if not text.startswith("---") or not re.search(r"^name:\s*.+", text, re.M) or not re.search(r"^description:\s*.+", text, re.M):
+        bad.append(f"bad frontmatter: {skill}")
+if bad:
+    raise SystemExit("\n".join(bad))
+print("Validated 204 standalone skill packages")
+PY
+```
+
+### 3. Install Into An Agent Skill Root
+
+Set `AGENT_SKILLS_ROOT` to the directory your agent scans. If unset, the commands use the common Hermes path.
+
+```bash
+export AGENT_SKILLS_ROOT="${AGENT_SKILLS_ROOT:-$HOME/.hermes/skills}"
+mkdir -p "$AGENT_SKILLS_ROOT"
+
+for package_dir in packages/*; do
+  test -f "$package_dir/SKILL.md" || continue
+  skill_id="$(basename "$package_dir")"
+  rsync -a --delete \
+    --exclude ".env" \
+    --exclude "*.env" \
+    --exclude "__pycache__" \
+    --exclude "*.pyc" \
+    --exclude "*.log" \
+    --exclude ".DS_Store" \
+    "$package_dir/" "$AGENT_SKILLS_ROOT/$skill_id/"
+done
+```
+
+Then point the agent at:
+
+```text
+$AGENT_SKILLS_ROOT
+```
+
+### 4. Install Or Inspect One Skill
+
+```bash
+export AGENT_SKILLS_ROOT="${AGENT_SKILLS_ROOT:-$HOME/.hermes/skills}"
+rsync -a --delete packages/weather/ "$AGENT_SKILLS_ROOT/weather/"
+sed -n '1,120p' "$AGENT_SKILLS_ROOT/weather/SKILL.md"
+```
+
+### 5. Load Behavior For Agents
+
+- Treat every `packages/<skill-slug>/` as a separate skill identity.
+- Use the folder slug for filesystem identity and frontmatter `name` for runtime display or command identity.
+- Read `package.json` for install metadata only; the operational source of truth is `SKILL.md`.
+- Read local `references/`, `scripts/`, `templates/`, `tests/`, and `assets/` only when that skill is selected.
+- Do not run helper scripts during install.
+- Keep live credentials in local `.env` files outside git.
+
 ## Layout
 
 ```text
@@ -35,7 +127,7 @@ mad-scientist-skill-monorepo/
     └── ...
 ```
 
-## Quick Start
+## Developer Quick Start
 
 ```bash
 git clone https://github.com/TeddyJubu/mad-scientist-skill-monorepo.git
