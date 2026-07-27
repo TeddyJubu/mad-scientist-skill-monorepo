@@ -22,6 +22,14 @@ PROBE_TIMEOUT = 120             # 试跑超时（秒）
 API_BASE = "https://api.apify.com/v2"
 
 
+def auth_headers(token, include_content_type=False):
+    """Build API headers without placing credentials in URLs."""
+    headers = {"Authorization": f"Bearer {token}"}
+    if include_content_type:
+        headers["Content-Type"] = "application/json"
+    return headers
+
+
 def load_token(config_path, token_name="default"):
     """从 config.json 加载 Token"""
     if config_path and os.path.exists(config_path):
@@ -37,12 +45,11 @@ def load_token(config_path, token_name="default"):
 
 def start_run(actor_id, run_input, token):
     """启动 Actor Run"""
-    url = f"{API_BASE}/acts/{actor_id.replace('/', '~')}/runs"
+    url = f"{API_BASE}/actors/{actor_id.replace('/', '~')}/runs"
     resp = requests.post(
         url,
         json=run_input,
-        headers={"Content-Type": "application/json"},
-        params={"token": token},
+        headers=auth_headers(token, include_content_type=True),
     )
     resp.raise_for_status()
     data = resp.json().get("data", {})
@@ -54,7 +61,7 @@ def poll_run(run_id, token, timeout=DEFAULT_TIMEOUT, interval=DEFAULT_POLL_INTER
     url = f"{API_BASE}/actor-runs/{run_id}"
     start = time.time()
     while time.time() - start < timeout:
-        resp = requests.get(url, params={"token": token})
+        resp = requests.get(url, headers=auth_headers(token))
         resp.raise_for_status()
         status = resp.json().get("data", {}).get("status", "UNKNOWN")
         elapsed = int(time.time() - start)
@@ -71,7 +78,7 @@ def abort_run(run_id, token):
     """中止 Run"""
     url = f"{API_BASE}/actor-runs/{run_id}/abort"
     try:
-        requests.post(url, params={"token": token})
+        requests.post(url, headers=auth_headers(token))
     except Exception:
         pass
 
@@ -79,7 +86,7 @@ def abort_run(run_id, token):
 def get_dataset(dataset_id, token):
     """获取 Dataset 结果"""
     url = f"{API_BASE}/datasets/{dataset_id}/items"
-    resp = requests.get(url, params={"token": token})
+    resp = requests.get(url, headers=auth_headers(token))
     resp.raise_for_status()
     return resp.json()
 
