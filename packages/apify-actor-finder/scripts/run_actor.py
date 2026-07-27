@@ -19,37 +19,60 @@ Output:
     Saves results to a CSV file and prints the path.
 """
 
-import sys
-import json
-import time
-import argparse
-import urllib.request
-import urllib.parse
-import urllib.error
+from __future__ import annotations
 
+import argparse
+import csv
+import io
+import json
+import sys
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
 
 API_BASE = "https://api.apify.com/v2"
+FORMULA_PREFIXES = ("=", "+", "-", "@")
+
+
+def neutralize_spreadsheet_formula(value: str) -> str:
+    """Prevent a CSV cell from being interpreted as a spreadsheet formula."""
+    if value.lstrip().startswith(FORMULA_PREFIXES):
+        return "'" + value
+    return value
 
 
 def apify_get(api_key: str, path: str) -> dict:
     url = f"{API_BASE}{path}"
-    req = urllib.request.Request(url, headers={
-        "Authorization": f"Bearer {api_key}",
-        "Accept": "application/json",
-    })
+    req = urllib.request.Request(
+        url,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Accept": "application/json",
+        },
+    )
     with urllib.request.urlopen(req) as resp:
         return json.loads(resp.read())
 
 
-def apify_post(api_key: str, path: str, body: dict, params: dict = None) -> dict:
+def apify_post(
+    api_key: str,
+    path: str,
+    body: dict,
+    params: dict | None = None,
+) -> dict:
     qs = ("?" + urllib.parse.urlencode(params)) if params else ""
     url = f"{API_BASE}{path}{qs}"
     payload = json.dumps(body).encode("utf-8")
-    req = urllib.request.Request(url, data=payload, headers={
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-    })
+    req = urllib.request.Request(
+        url,
+        data=payload,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+    )
     with urllib.request.urlopen(req) as resp:
         return json.loads(resp.read())
 
@@ -83,28 +106,49 @@ def wait_for_run(api_key: str, run_id: str, timeout: int = 300) -> dict:
 def download_csv(api_key: str, dataset_id: str, output_path: str) -> int:
     """Download dataset items as CSV and save to output_path. Returns item count."""
     url = f"{API_BASE}/datasets/{dataset_id}/items?format=csv&clean=true"
-    req = urllib.request.Request(url, headers={
-        "Authorization": f"Bearer {api_key}",
-    })
+    req = urllib.request.Request(
+        url,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+        },
+    )
     with urllib.request.urlopen(req) as resp:
         content = resp.read()
 
-    with open(output_path, "wb") as f:
-        f.write(content)
+    source = io.StringIO(content.decode("utf-8-sig"), newline="")
+    rows = [
+        [neutralize_spreadsheet_formula(cell) for cell in row]
+        for row in csv.reader(source)
+    ]
 
-    # Count rows (subtract 1 for header)
-    lines = content.decode("utf-8-sig").strip().splitlines()
-    return max(0, len(lines) - 1)
+    with open(output_path, "w", encoding="utf-8", newline="") as f:
+        writer = csv.writer(f, lineterminator="\n")
+        writer.writerows(rows)
+
+    return max(0, len(rows) - 1)
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Run an Apify actor and save results to CSV.")
+    parser = argparse.ArgumentParser(
+        description="Run an Apify actor and save results to CSV."
+    )
     parser.add_argument("api_key", help="Apify API key")
-    parser.add_argument("actor_id", help="Actor ID (e.g. compass~crawler-google-places)")
+    parser.add_argument(
+        "actor_id", help="Actor ID (e.g. compass~crawler-google-places)"
+    )
     parser.add_argument("input_json", help="JSON string of actor input")
-    parser.add_argument("--output", default="apify_results.csv", help="Output CSV file path")
-    parser.add_argument("--timeout", type=int, default=300, help="Max seconds to wait (default: 300)")
-    parser.add_argument("--max-items", type=int, default=100, help="Max items to retrieve (default: 100)")
+    parser.add_argument(
+        "--output", default="apify_results.csv", help="Output CSV file path"
+    )
+    parser.add_argument(
+        "--timeout", type=int, default=300, help="Max seconds to wait (default: 300)"
+    )
+    parser.add_argument(
+        "--max-items",
+        type=int,
+        default=100,
+        help="Max items to retrieve (default: 100)",
+    )
     args = parser.parse_args()
 
     try:
@@ -138,7 +182,10 @@ def main():
 
     final_status = run.get("status", "UNKNOWN")
     if final_status == "FAILED":
-        print(f"Error: Actor run failed. Check the Apify console for details.", file=sys.stderr)
+        print(
+            "Error: Actor run failed. Check the Apify console for details.",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     print(f"Run finished with status: {final_status}")
@@ -147,7 +194,7 @@ def main():
     try:
         count = download_csv(args.api_key, dataset_id, args.output)
         print(f"Saved {count} rows to: {args.output}")
-    except Exception as e:
+    except (OSError, UnicodeError, csv.Error, urllib.error.URLError) as e:
         print(f"Error downloading results: {e}", file=sys.stderr)
         sys.exit(1)
 
