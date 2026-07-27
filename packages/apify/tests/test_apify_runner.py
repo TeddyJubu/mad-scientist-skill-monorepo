@@ -56,6 +56,7 @@ class ApifyRunnerTests(unittest.TestCase):
                 "Content-Type": "application/json",
             },
             params={"maxTotalChargeUsd": "1.25"},
+            timeout=apify_runner.HTTP_TIMEOUT,
         )
 
     def test_positive_charge_cap_rejects_invalid_values(self):
@@ -128,6 +129,27 @@ class ApifyRunnerTests(unittest.TestCase):
 
         self.assertIn("run-1", stderr.getvalue())
         self.assertIn("offline", stderr.getvalue())
+
+    def test_run_batch_aborts_after_poll_timeout(self):
+        with (
+            patch.object(
+                apify_runner,
+                "start_run",
+                return_value=("run-1", "dataset-1"),
+            ),
+            patch.object(apify_runner, "poll_run", return_value="TIMEOUT"),
+            patch.object(apify_runner, "abort_run") as abort_run,
+            patch.object(apify_runner, "get_dataset") as get_dataset,
+        ):
+            result = apify_runner.run_batch(
+                "xquik/x-tweet-scraper",
+                {"maxItems": 2},
+                "token",
+            )
+
+        self.assertEqual(result, ([], [], "TIMEOUT"))
+        abort_run.assert_called_once_with("run-1", "token")
+        get_dataset.assert_not_called()
 
 
 if __name__ == "__main__":

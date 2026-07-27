@@ -38,7 +38,7 @@ class SafeCsvTests(unittest.TestCase):
                 run_actor.urllib.request,
                 "urlopen",
                 return_value=FakeResponse(),
-            ):
+            ) as urlopen:
                 count = run_actor.download_csv(
                     "secret-token",
                     "dataset-1",
@@ -51,6 +51,15 @@ class SafeCsvTests(unittest.TestCase):
         self.assertEqual(count, 2)
         self.assertEqual(rows[1], ["alice", "'=1+1", "'-2"])
         self.assertEqual(rows[2], ["bob", "safe", "'@command"])
+        request = urlopen.call_args.args[0]
+        self.assertEqual(
+            request.get_header("Authorization"),
+            "Bearer secret-token",
+        )
+        self.assertEqual(
+            urlopen.call_args.kwargs["timeout"],
+            run_actor.HTTP_TIMEOUT,
+        )
 
     def test_neutralizer_handles_leading_spaces(self):
         self.assertEqual(

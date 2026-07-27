@@ -33,6 +33,7 @@ import urllib.request
 
 API_BASE = "https://api.apify.com/v2"
 FORMULA_PREFIXES = ("=", "+", "-", "@")
+HTTP_TIMEOUT = 90
 
 
 def neutralize_spreadsheet_formula(value: str) -> str:
@@ -51,7 +52,7 @@ def apify_get(api_key: str, path: str) -> dict:
             "Accept": "application/json",
         },
     )
-    with urllib.request.urlopen(req) as resp:
+    with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT) as resp:
         return json.loads(resp.read())
 
 
@@ -73,7 +74,7 @@ def apify_post(
             "Accept": "application/json",
         },
     )
-    with urllib.request.urlopen(req) as resp:
+    with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT) as resp:
         return json.loads(resp.read())
 
 
@@ -112,7 +113,7 @@ def download_csv(api_key: str, dataset_id: str, output_path: str) -> int:
             "Authorization": f"Bearer {api_key}",
         },
     )
-    with urllib.request.urlopen(req) as resp:
+    with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT) as resp:
         content = resp.read()
 
     source = io.StringIO(content.decode("utf-8-sig"), newline="")

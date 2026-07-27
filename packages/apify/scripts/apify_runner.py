@@ -19,6 +19,7 @@ DEFAULT_TIMEOUT = 600  # 单批超时（秒）
 DEFAULT_BATCH_SIZE = 50  # 默认分批大小
 BATCH_PAUSE = 3  # 批次间歇（秒）
 PROBE_TIMEOUT = 120  # 试跑超时（秒）
+HTTP_TIMEOUT = 30  # 单次 HTTP 请求超时（秒）
 
 API_BASE = "https://api.apify.com/v2"
 
@@ -66,6 +67,7 @@ def start_run(actor_id, run_input, token, max_total_charge_usd=None):
         json=run_input,
         headers=auth_headers(token, include_content_type=True),
         params=params,
+        timeout=HTTP_TIMEOUT,
     )
     resp.raise_for_status()
     data = resp.json().get("data", {})
@@ -77,7 +79,11 @@ def poll_run(run_id, token, timeout=DEFAULT_TIMEOUT, interval=DEFAULT_POLL_INTER
     url = f"{API_BASE}/actor-runs/{run_id}"
     start = time.time()
     while time.time() - start < timeout:
-        resp = requests.get(url, headers=auth_headers(token))
+        resp = requests.get(
+            url,
+            headers=auth_headers(token),
+            timeout=HTTP_TIMEOUT,
+        )
         resp.raise_for_status()
         status = resp.json().get("data", {}).get("status", "UNKNOWN")
         elapsed = int(time.time() - start)
@@ -94,7 +100,12 @@ def abort_run(run_id, token):
     """中止 Run"""
     url = f"{API_BASE}/actor-runs/{run_id}/abort"
     try:
-        requests.post(url, headers=auth_headers(token))
+        response = requests.post(
+            url,
+            headers=auth_headers(token),
+            timeout=HTTP_TIMEOUT,
+        )
+        response.raise_for_status()
     except requests.RequestException as error:
         print(
             f"  ⚠️ 无法中止 Run {run_id}: {error}",
@@ -133,7 +144,11 @@ def print_diagnostics(diagnostics):
 def get_dataset(dataset_id, token):
     """获取 Dataset 结果"""
     url = f"{API_BASE}/datasets/{dataset_id}/items"
-    resp = requests.get(url, headers=auth_headers(token))
+    resp = requests.get(
+        url,
+        headers=auth_headers(token),
+        timeout=HTTP_TIMEOUT,
+    )
     resp.raise_for_status()
     return resp.json()
 
@@ -190,6 +205,7 @@ def run_batch(
     )
     status = poll_run(run_id, token, timeout=timeout)
     if status != "SUCCEEDED":
+        abort_run(run_id, token)
         return [], [], status
     items, diagnostics = partition_dataset_rows(get_dataset(dataset_id, token))
     print_diagnostics(diagnostics)
