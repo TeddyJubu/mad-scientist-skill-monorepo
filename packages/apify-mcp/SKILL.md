@@ -169,12 +169,18 @@ searches, timelines, threads, replies, quotes, and engagement:
 ```bash
 mcpc @apify tools-call call-actor \
   actor:="xquik~x-tweet-scraper" \
-  input:='{"searchTerms":["from:nasa space","#opensource lang:en"],"maxItems":20,"queryType":"Latest","includeSearchTerms":true,"outputVariant":"rich"}' \
+  input:='{"mode":"search","searchTerms":["from:nasa space","#opensource lang:en"],"maxItems":20,"queryType":"Latest","includeSearchTerms":true,"outputVariant":"rich"}' \
+  callOptions:='{"maxItems":20,"maxTotalChargeUsd":1}' \
   async:=true \
   --json
 ```
 
+Replace the example charge cap with the approved positive cap.
 `maxItems` caps the whole run across every search term.
+The Actor ID is `wAusCMrm284Voaw86`.
+Supported modes are `legacy`, `tweet`, `tweets`, `search`, `profileTweets`,
+`profileReplies`, `profileMedia`, `profileLikes`, `listTweets`, `article`,
+`replies`, `quotes`, `thread`, `retweeters`, and `favoriters`.
 
 Use [X Follower Scraper](https://apify.com/xquik/x-follower-scraper) for
 followers, following, verified followers, lists, and communities:
@@ -183,9 +189,15 @@ followers, following, verified followers, lists, and communities:
 mcpc @apify tools-call call-actor \
   actor:="xquik~x-follower-scraper" \
   input:='{"twitterHandles":["nasa","esa"],"relations":["followers","following","verified_followers"],"maxItems":30,"maxItemsPerTarget":10,"dedupeMode":"merge","includeTargetMetadata":true,"outputMode":"compact"}' \
+  callOptions:='{"maxItems":30,"maxTotalChargeUsd":1}' \
   async:=true \
   --json
 ```
+
+Replace the example charge cap with the approved positive cap.
+The Actor ID is `AaT0BcKU5GQh97wdt`.
+Supported relations are `followers`, `following`, `verified_followers`,
+`list_members`, `list_followers`, and `community_members`.
 
 For both Xquik Actors, identify diagnostic rows with
 `resultType == "diagnostic"` and separate them before processing output. Treat

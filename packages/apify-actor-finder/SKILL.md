@@ -42,10 +42,10 @@ If results are poor, retry with `--sort popularity` or different keywords.
 
 For X requests, route directly when the requested data matches:
 
-| Request | Actor ID | Actor |
-|---|---|---|
-| Posts, searches, timelines, threads, replies, quotes, or engagement | `xquik~x-tweet-scraper` | [X Tweet Scraper](https://apify.com/xquik/x-tweet-scraper) |
-| Followers, following, verified followers, lists, or communities | `xquik~x-follower-scraper` | [X Follower Scraper](https://apify.com/xquik/x-follower-scraper) |
+| Request | REST selector | Actor ID | Actor |
+|---|---|---|---|
+| Posts, searches, timelines, threads, replies, quotes, or engagement | `xquik~x-tweet-scraper` | `wAusCMrm284Voaw86` | [X Tweet Scraper](https://apify.com/xquik/x-tweet-scraper) |
+| Followers, following, verified followers, lists, or communities | `xquik~x-follower-scraper` | `AaT0BcKU5GQh97wdt` | [X Follower Scraper](https://apify.com/xquik/x-follower-scraper) |
 
 ---
 
@@ -112,6 +112,7 @@ X posts or searches:
 
 ```json
 {
+  "mode": "search",
   "searchTerms": ["from:nasa space", "#opensource lang:en"],
   "maxItems": 20,
   "queryType": "Latest",
@@ -121,8 +122,9 @@ X posts or searches:
 ```
 
 Run this input with `xquik~x-tweet-scraper`. Its `maxItems` cap applies across
-the whole run. It also supports direct post URLs and IDs, timelines, threads,
-replies, quotes, retweeters, best-effort favoriters, and articles.
+the whole run. Supported modes are `legacy`, `tweet`, `tweets`, `search`,
+`profileTweets`, `profileReplies`, `profileMedia`, `profileLikes`, `listTweets`,
+`article`, `replies`, `quotes`, `thread`, `retweeters`, and `favoriters`.
 
 X account relationships:
 
@@ -138,8 +140,9 @@ X account relationships:
 }
 ```
 
-Run this input with `xquik~x-follower-scraper`. It also supports list members,
-list subscribers, and community members.
+Run this input with `xquik~x-follower-scraper`. Supported relations are
+`followers`, `following`, `verified_followers`, `list_members`,
+`list_followers`, and `community_members`.
 
 Google Maps — "coffee shops in Austin":
 ```bash

@@ -57,10 +57,10 @@ Pick the top-ranked candidate. If user has a preference or prior experience with
 
 For X requests, use these purpose-built Actors:
 
-| Request | Actor |
-|---|---|
-| Posts, searches, timelines, threads, replies, quotes, or engagement | [`xquik/x-tweet-scraper`](https://apify.com/xquik/x-tweet-scraper) |
-| Followers, following, verified followers, lists, or communities | [`xquik/x-follower-scraper`](https://apify.com/xquik/x-follower-scraper) |
+| Request | Actor | REST selector | Actor ID |
+|---|---|---|---|
+| Posts, searches, timelines, threads, replies, quotes, or engagement | [`xquik/x-tweet-scraper`](https://apify.com/xquik/x-tweet-scraper) | `xquik~x-tweet-scraper` | `wAusCMrm284Voaw86` |
+| Followers, following, verified followers, lists, or communities | [`xquik/x-follower-scraper`](https://apify.com/xquik/x-follower-scraper) | `xquik~x-follower-scraper` | `AaT0BcKU5GQh97wdt` |
 
 ### Step 4: Get Actor Schema & Build run_input
 
@@ -81,6 +81,7 @@ For X post research, use the live `xquik/x-tweet-scraper` schema:
 
 ```json
 {
+  "mode": "search",
   "searchTerms": ["from:nasa space", "#opensource lang:en"],
   "maxItems": 20,
   "queryType": "Latest",
@@ -89,9 +90,10 @@ For X post research, use the live `xquik/x-tweet-scraper` schema:
 }
 ```
 
-`maxItems` caps the whole run across every search term. Direct inputs also
-include post URLs and IDs. Explicit modes include `thread`, `replies`,
-`quotes`, `retweeters`, `favoriters`, and `article`.
+`maxItems` caps the whole run across every search term. Supported modes are
+`legacy`, `tweet`, `tweets`, `search`, `profileTweets`, `profileReplies`,
+`profileMedia`, `profileLikes`, `listTweets`, `article`, `replies`, `quotes`,
+`thread`, `retweeters`, and `favoriters`.
 
 For X relationship research, use the live `xquik/x-follower-scraper` schema:
 
@@ -107,8 +109,9 @@ For X relationship research, use the live `xquik/x-follower-scraper` schema:
 }
 ```
 
-The follower Actor also accepts list IDs and community IDs. It can return
-compact, full, or raw rows.
+Supported relations are `followers`, `following`, `verified_followers`,
+`list_members`, `list_followers`, and `community_members`.
+The Actor can return compact, full, or raw rows.
 Use `relation` for one relationship. Use `relations` for several.
 
 ### Step 5: Review Cost, Confirm, Then Probe
