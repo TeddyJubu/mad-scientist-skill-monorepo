@@ -151,6 +151,29 @@ class ApifyRunnerTests(unittest.TestCase):
         abort_run.assert_called_once_with("run-1", "token")
         get_dataset.assert_not_called()
 
+    def test_run_batch_aborts_and_reraises_poll_request_failure(self):
+        error = apify_runner.requests.Timeout("status request timed out")
+        with (
+            patch.object(
+                apify_runner,
+                "start_run",
+                return_value=("run-1", "dataset-1"),
+            ),
+            patch.object(apify_runner, "poll_run", side_effect=error),
+            patch.object(apify_runner, "abort_run") as abort_run,
+            patch.object(apify_runner, "get_dataset") as get_dataset,
+            self.assertRaises(apify_runner.requests.Timeout) as raised,
+        ):
+            apify_runner.run_batch(
+                "xquik/x-tweet-scraper",
+                {"maxItems": 2},
+                "token",
+            )
+
+        self.assertIs(raised.exception, error)
+        abort_run.assert_called_once_with("run-1", "token")
+        get_dataset.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import http.client
 import io
 import json
 import sys
@@ -195,7 +196,13 @@ def main():
     try:
         count = download_csv(args.api_key, dataset_id, args.output)
         print(f"Saved {count} rows to: {args.output}")
-    except (OSError, UnicodeError, csv.Error, urllib.error.URLError) as e:
+    except (
+        OSError,
+        UnicodeError,
+        csv.Error,
+        urllib.error.URLError,
+        http.client.HTTPException,
+    ) as e:
         print(f"Error downloading results: {e}", file=sys.stderr)
         sys.exit(1)
 

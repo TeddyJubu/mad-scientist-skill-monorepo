@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import csv
+import http.client
 import importlib.util
+import io
 import tempfile
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
@@ -69,6 +72,44 @@ class SafeCsvTests(unittest.TestCase):
         self.assertEqual(
             run_actor.neutralize_spreadsheet_formula("ordinary"),
             "ordinary",
+        )
+
+    def test_main_handles_incomplete_dataset_response(self):
+        run = {
+            "id": "run-1",
+            "defaultDatasetId": "dataset-1",
+            "status": "SUCCEEDED",
+        }
+        stderr = io.StringIO()
+        with (
+            patch.object(
+                run_actor.sys,
+                "argv",
+                [
+                    "run_actor.py",
+                    "secret-token",
+                    "xquik~x-tweet-scraper",
+                    '{"maxItems": 2}',
+                ],
+            ),
+            patch.object(run_actor, "start_run", return_value=run),
+            patch.object(
+                run_actor,
+                "download_csv",
+                side_effect=http.client.IncompleteRead(b"", 1),
+            ) as download_csv,
+            redirect_stdout(io.StringIO()),
+            redirect_stderr(stderr),
+            self.assertRaises(SystemExit) as raised,
+        ):
+            run_actor.main()
+
+        self.assertEqual(raised.exception.code, 1)
+        self.assertIn("Error downloading results", stderr.getvalue())
+        download_csv.assert_called_once_with(
+            "secret-token",
+            "dataset-1",
+            "apify_results.csv",
         )
 
 

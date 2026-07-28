@@ -203,7 +203,11 @@ def run_batch(
         token,
         max_total_charge_usd,
     )
-    status = poll_run(run_id, token, timeout=timeout)
+    try:
+        status = poll_run(run_id, token, timeout=timeout)
+    except requests.RequestException:
+        abort_run(run_id, token)
+        raise
     if status != "SUCCEEDED":
         abort_run(run_id, token)
         return [], [], status
