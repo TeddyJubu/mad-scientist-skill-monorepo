@@ -173,10 +173,20 @@ def probe(actor_id, run_input, token, run_options):
             token,
             run_options,
         )
-    except requests.HTTPError as e:
-        return False, f"启动失败: {e.response.status_code} {e.response.text[:200]}"
+    except requests.RequestException as error:
+        response = getattr(error, "response", None)
+        detail = (
+            f"{response.status_code} {response.text[:200]}"
+            if response is not None
+            else printable_text(error)
+        )
+        return False, f"启动失败: {detail}"
 
-    status = poll_run(run_id, token, timeout=PROBE_TIMEOUT)
+    try:
+        status = poll_run(run_id, token, timeout=PROBE_TIMEOUT)
+    except requests.RequestException as error:
+        abort_run(run_id, token)
+        return False, f"运行查询失败: {printable_text(error)}"
     if status != "SUCCEEDED":
         abort_run(run_id, token)
         return False, f"运行状态: {status}"
@@ -376,8 +386,14 @@ def main():
                 run_options,
                 args.timeout,
             )
-        except requests.HTTPError as e:
-            print(f"  ❌ 批次 {i} 失败: {e.response.status_code}", file=sys.stderr)
+        except requests.RequestException as error:
+            response = getattr(error, "response", None)
+            detail = (
+                response.status_code
+                if response is not None
+                else printable_text(error)
+            )
+            print(f"  ❌ 批次 {i} 失败: {detail}", file=sys.stderr)
             continue
 
         if status == "SUCCEEDED":

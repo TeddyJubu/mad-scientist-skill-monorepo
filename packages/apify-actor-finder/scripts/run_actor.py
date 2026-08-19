@@ -8,6 +8,7 @@ import csv
 import http.client
 import io
 import json
+import socket
 import sys
 import time
 import urllib.error
@@ -96,7 +97,13 @@ def start_run(
         params["maxItems"] = max_items
     else:
         params["maxTotalChargeUsd"] = max_total_charge_usd
-    return apify_post(api_key, f"/actors/{actor_id}/runs", input_data, params)["data"]
+    normalized_actor_id = actor_id.replace("/", "~")
+    return apify_post(
+        api_key,
+        f"/actors/{normalized_actor_id}/runs",
+        input_data,
+        params,
+    )["data"]
 
 
 def wait_for_run(api_key: str, run_id: str, timeout: int = 300) -> dict:
@@ -191,6 +198,9 @@ def main():
         body = e.read().decode()
         print(f"Error starting run: HTTP {e.code} — {body}", file=sys.stderr)
         sys.exit(1)
+    except (urllib.error.URLError, socket.timeout) as e:
+        print(f"Error starting run: {e}", file=sys.stderr)
+        sys.exit(1)
 
     run_id = run["id"]
     dataset_id = run["defaultDatasetId"]
@@ -201,6 +211,9 @@ def main():
         print(f"Waiting for run to finish (timeout: {args.timeout}s)...")
         try:
             run = wait_for_run(args.api_key, run_id, timeout=args.timeout)
+        except (urllib.error.URLError, socket.timeout) as e:
+            print(f"Error waiting for run: {e}", file=sys.stderr)
+            sys.exit(1)
         except TimeoutError as e:
             print(f"Warning: {e}", file=sys.stderr)
             print("Downloading partial results...")

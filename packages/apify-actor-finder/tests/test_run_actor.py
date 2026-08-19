@@ -6,6 +6,7 @@ import csv
 import http.client
 import importlib.util
 import io
+import socket
 import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
@@ -50,7 +51,7 @@ class SafeCsvTests(unittest.TestCase):
             ):
                 result = run_actor.start_run(
                     "secret-token",
-                    "xquik~x-tweet-scraper",
+                    "xquik/x-tweet-scraper",
                     {"maxItems": 2},
                     max_items,
                     max_charge,
@@ -162,6 +163,44 @@ class SafeCsvTests(unittest.TestCase):
             "dataset-1",
             "apify_results.csv",
         )
+
+    def test_main_handles_run_network_failures(self):
+        run = {
+            "id": "run-1",
+            "defaultDatasetId": "dataset-1",
+            "status": "RUNNING",
+        }
+        cases = (
+            ("start_run", run_actor.urllib.error.URLError("offline"), "starting"),
+            ("wait_for_run", socket.timeout("offline"), "waiting for"),
+        )
+        for target, error, operation in cases:
+            stderr = io.StringIO()
+            with (
+                self.subTest(target=target),
+                patch.object(
+                    run_actor.sys,
+                    "argv",
+                    [
+                        "run_actor.py",
+                        "secret-token",
+                        "xquik/x-tweet-scraper",
+                        "{}",
+                        "--max-total-charge-usd",
+                        "1.25",
+                    ],
+                ),
+                patch.object(run_actor, "start_run", return_value=run),
+                patch.object(run_actor, target, side_effect=error),
+                redirect_stdout(io.StringIO()),
+                redirect_stderr(stderr),
+                self.assertRaises(SystemExit) as raised,
+            ):
+                run_actor.main()
+
+            self.assertEqual(raised.exception.code, 1)
+            self.assertIn(f"Error {operation} run:", stderr.getvalue())
+            self.assertIn("offline", stderr.getvalue())
 
 
 if __name__ == "__main__":
