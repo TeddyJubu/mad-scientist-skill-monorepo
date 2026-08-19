@@ -34,30 +34,45 @@ class FakeResponse:
 
 
 class ApifyRunnerTests(unittest.TestCase):
-    def test_start_run_uses_headers_and_forwards_hard_charge_cap(self):
-        with patch.object(
-            apify_runner.requests,
-            "post",
-            return_value=FakeResponse(),
-        ) as post:
-            result = apify_runner.start_run(
-                "xquik/x-tweet-scraper",
-                {"maxItems": 2},
-                "secret-token",
-                "1.25",
+    def test_start_run_forwards_exact_pricing_cap(self):
+        for run_options in (
+            {"maxItems": 20},
+            {"maxTotalChargeUsd": "1.25"},
+        ):
+            with (
+                self.subTest(run_options=run_options),
+                patch.object(
+                    apify_runner.requests,
+                    "post",
+                    return_value=FakeResponse(),
+                ) as post,
+            ):
+                result = apify_runner.start_run(
+                    "xquik/x-tweet-scraper",
+                    {"maxItems": 2},
+                    "secret-token",
+                    run_options,
+                )
+
+            self.assertEqual(result, ("run-1", "dataset-1"))
+            post.assert_called_once_with(
+                "https://api.apify.com/v2/actors/xquik~x-tweet-scraper/runs",
+                json={"maxItems": 2},
+                headers={
+                    "Authorization": "Bearer secret-token",
+                    "Content-Type": "application/json",
+                },
+                params=run_options,
+                timeout=apify_runner.HTTP_TIMEOUT,
             )
 
-        self.assertEqual(result, ("run-1", "dataset-1"))
-        post.assert_called_once_with(
-            "https://api.apify.com/v2/actors/xquik~x-tweet-scraper/runs",
-            json={"maxItems": 2},
-            headers={
-                "Authorization": "Bearer secret-token",
-                "Content-Type": "application/json",
-            },
-            params={"maxTotalChargeUsd": "1.25"},
-            timeout=apify_runner.HTTP_TIMEOUT,
-        )
+    def test_start_run_rejects_missing_or_conflicting_pricing_caps(self):
+        for run_options in ({}, {"maxItems": 20, "maxTotalChargeUsd": "1.25"}):
+            with (
+                self.subTest(run_options=run_options),
+                self.assertRaisesRegex(ValueError, "exactly one"),
+            ):
+                apify_runner.start_run("actor", {}, "token", run_options)
 
     def test_positive_charge_cap_rejects_invalid_values(self):
         for value in ("not-a-number", "NaN", "0", "-1"):
@@ -68,6 +83,10 @@ class ApifyRunnerTests(unittest.TestCase):
                 apify_runner.positive_charge_cap(value)
 
         self.assertEqual(apify_runner.positive_charge_cap("1.250"), "1.250")
+        for value in ("0", "-1"):
+            with self.assertRaises(argparse.ArgumentTypeError):
+                apify_runner.positive_item_cap(value)
+        self.assertEqual(apify_runner.positive_item_cap("2"), 2)
 
     def test_probe_input_reduces_existing_list_and_scalar_caps(self):
         run_input = {
@@ -110,6 +129,7 @@ class ApifyRunnerTests(unittest.TestCase):
                 "xquik/x-tweet-scraper",
                 {"maxItems": 2},
                 "token",
+                {"maxTotalChargeUsd": "1.25"},
             )
 
         self.assertFalse(success)
@@ -145,6 +165,7 @@ class ApifyRunnerTests(unittest.TestCase):
                 "xquik/x-tweet-scraper",
                 {"maxItems": 2},
                 "token",
+                {"maxTotalChargeUsd": "1.25"},
             )
 
         self.assertEqual(result, ([], [], "TIMEOUT"))
@@ -168,6 +189,7 @@ class ApifyRunnerTests(unittest.TestCase):
                 "xquik/x-tweet-scraper",
                 {"maxItems": 2},
                 "token",
+                {"maxTotalChargeUsd": "1.25"},
             )
 
         self.assertIs(raised.exception, error)

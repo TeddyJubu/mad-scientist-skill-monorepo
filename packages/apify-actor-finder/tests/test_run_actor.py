@@ -34,6 +34,48 @@ class FakeResponse:
 
 
 class SafeCsvTests(unittest.TestCase):
+    def test_start_run_uses_exact_pricing_ceiling(self):
+        cases = (
+            (20, None, {"waitForFinish": 60, "maxItems": 20}),
+            (None, "1.25", {"waitForFinish": 60, "maxTotalChargeUsd": "1.25"}),
+        )
+        for max_items, max_charge, expected_params in cases:
+            with (
+                self.subTest(expected_params=expected_params),
+                patch.object(
+                    run_actor,
+                    "apify_post",
+                    return_value={"data": {"id": "run-1"}},
+                ) as post,
+            ):
+                result = run_actor.start_run(
+                    "secret-token",
+                    "xquik~x-tweet-scraper",
+                    {"maxItems": 2},
+                    max_items,
+                    max_charge,
+                )
+
+            self.assertEqual(result, {"id": "run-1"})
+            post.assert_called_once_with(
+                "secret-token",
+                "/actors/xquik~x-tweet-scraper/runs",
+                {"maxItems": 2},
+                expected_params,
+            )
+
+    def test_start_run_rejects_missing_or_conflicting_pricing_caps(self):
+        for max_items, max_charge in ((None, None), (20, "1.25")):
+            with (
+                self.subTest(max_items=max_items, max_charge=max_charge),
+                self.assertRaisesRegex(ValueError, "exactly one"),
+            ):
+                run_actor.start_run("token", "actor", {}, max_items, max_charge)
+        with self.assertRaises(run_actor.argparse.ArgumentTypeError):
+            run_actor.positive_item_cap("0")
+        with self.assertRaises(run_actor.argparse.ArgumentTypeError):
+            run_actor.positive_charge_cap("NaN")
+
     def test_download_csv_neutralizes_spreadsheet_formulas(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "results.csv"
@@ -90,9 +132,11 @@ class SafeCsvTests(unittest.TestCase):
                     "secret-token",
                     "xquik~x-tweet-scraper",
                     '{"maxItems": 2}',
+                    "--max-total-charge-usd",
+                    "1.25",
                 ],
             ),
-            patch.object(run_actor, "start_run", return_value=run),
+            patch.object(run_actor, "start_run", return_value=run) as start_run,
             patch.object(
                 run_actor,
                 "download_csv",
@@ -106,6 +150,13 @@ class SafeCsvTests(unittest.TestCase):
 
         self.assertEqual(raised.exception.code, 1)
         self.assertIn("Error downloading results", stderr.getvalue())
+        start_run.assert_called_once_with(
+            "secret-token",
+            "xquik~x-tweet-scraper",
+            {"maxItems": 2},
+            None,
+            "1.25",
+        )
         download_csv.assert_called_once_with(
             "secret-token",
             "dataset-1",

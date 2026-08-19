@@ -1,23 +1,5 @@
 #!/usr/bin/env python3
-"""
-run_actor.py - Run an Apify actor with given input and save results to CSV.
-
-Usage:
-    python3.11 run_actor.py <api_key> <actor_id> <input_json> [--output path/to/output.csv] [--timeout 300] [--max-items 100]
-
-Arguments:
-    api_key     Your Apify API key
-    actor_id    Actor ID in the form username~actor-name (e.g. compass~crawler-google-places)
-    input_json  JSON string of the actor input (e.g. '{"searchStringsArray": ["coffee Austin"]}')
-
-Options:
-    --output    Path to save the CSV file (default: apify_results.csv)
-    --timeout   Max seconds to wait for the run to finish (default: 300)
-    --max-items Max number of dataset items to charge for (default: 100)
-
-Output:
-    Saves results to a CSV file and prints the path.
-"""
+"""Run an Apify Actor and save its dataset as a formula-safe CSV file."""
 
 from __future__ import annotations
 
@@ -31,10 +13,30 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from decimal import Decimal, InvalidOperation
 
 API_BASE = "https://api.apify.com/v2"
 FORMULA_PREFIXES = ("=", "+", "-", "@")
 HTTP_TIMEOUT = 90
+
+
+def positive_item_cap(value: str) -> int:
+    """Return a positive item cap."""
+    amount = int(value)
+    if amount <= 0:
+        raise argparse.ArgumentTypeError("item cap must be positive")
+    return amount
+
+
+def positive_charge_cap(value: str) -> str:
+    """Return a positive finite USD cap."""
+    try:
+        amount = Decimal(value)
+    except InvalidOperation as error:
+        raise argparse.ArgumentTypeError("charge cap must be positive") from error
+    if not amount.is_finite() or amount <= 0:
+        raise argparse.ArgumentTypeError("charge cap must be positive")
+    return format(amount, "f")
 
 
 def neutralize_spreadsheet_formula(value: str) -> str:
@@ -79,12 +81,22 @@ def apify_post(
         return json.loads(resp.read())
 
 
-def start_run(api_key: str, actor_id: str, input_data: dict, max_items: int) -> dict:
+def start_run(
+    api_key: str,
+    actor_id: str,
+    input_data: dict,
+    max_items: int | None,
+    max_total_charge_usd: str | None,
+) -> dict:
     """Start an actor run and return the run object."""
+    if (max_items is None) == (max_total_charge_usd is None):
+        raise ValueError("set exactly one pricing-specific run cap")
     params = {"waitForFinish": 60}
-    if max_items:
+    if max_items is not None:
         params["maxItems"] = max_items
-    return apify_post(api_key, f"/acts/{actor_id}/runs", input_data, params)["data"]
+    else:
+        params["maxTotalChargeUsd"] = max_total_charge_usd
+    return apify_post(api_key, f"/actors/{actor_id}/runs", input_data, params)["data"]
 
 
 def wait_for_run(api_key: str, run_id: str, timeout: int = 300) -> dict:
@@ -145,11 +157,16 @@ def main():
     parser.add_argument(
         "--timeout", type=int, default=300, help="Max seconds to wait (default: 300)"
     )
-    parser.add_argument(
+    run_cap = parser.add_mutually_exclusive_group(required=True)
+    run_cap.add_argument(
         "--max-items",
-        type=int,
-        default=100,
-        help="Max items to retrieve (default: 100)",
+        type=positive_item_cap,
+        help="Pay-per-result run ceiling",
+    )
+    run_cap.add_argument(
+        "--max-total-charge-usd",
+        type=positive_charge_cap,
+        help="Pay-per-event run ceiling in USD",
     )
     args = parser.parse_args()
 
@@ -163,7 +180,13 @@ def main():
     print(f"Input: {json.dumps(input_data, indent=2)}")
 
     try:
-        run = start_run(args.api_key, args.actor_id, input_data, args.max_items)
+        run = start_run(
+            args.api_key,
+            args.actor_id,
+            input_data,
+            args.max_items,
+            args.max_total_charge_usd,
+        )
     except urllib.error.HTTPError as e:
         body = e.read().decode()
         print(f"Error starting run: HTTP {e.code} — {body}", file=sys.stderr)

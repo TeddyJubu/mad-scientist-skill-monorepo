@@ -81,7 +81,7 @@ This prints the actor's description, README summary, and example input JSON. Rea
 **Decision rule:**
 - If the user's original request already contains the required information (e.g. they said "scrape coffee shops in Austin"), proceed directly to Step 4.
 - If any required input is missing or ambiguous, **stop and ask the user** before proceeding. Do not guess or invent URLs or search terms.
-- Review the Actor's current Apify pricing. Show the Actor, targets, input, and result cap.
+- Review current pricing. Show the Actor, targets, input, and matching run cap.
 - Get explicit approval before starting any paid run.
 
 **Example prompt to user:**
@@ -101,8 +101,11 @@ python3 ~/.hermes/skills/apify-actor-finder/scripts/run_actor.py \
   '<input_json>' \
   --output ~/<descriptive_filename>.csv \
   --timeout 300 \
-  --max-items 100
+  {pricing_cap_flag} {approved_cap}
 ```
+
+Use `--max-items` only for pay-per-result Actors. For pay-per-event Actors, use
+`--max-total-charge-usd` instead. Never pass both pricing-specific options.
 
 Always include `"proxyConfig": {"useApifyProxy": true}` in the input JSON when the actor supports it — it significantly improves success rates.
 
@@ -125,6 +128,7 @@ Run this input with `xquik~x-tweet-scraper`. Its `maxItems` cap applies across
 the whole run. Supported modes are `legacy`, `tweet`, `tweets`, `search`,
 `profileTweets`, `profileReplies`, `profileMedia`, `profileLikes`, `listTweets`,
 `article`, `replies`, `quotes`, `thread`, `retweeters`, and `favoriters`.
+For its current pay-per-event pricing, pass `--max-total-charge-usd`.
 
 X account relationships:
 
@@ -143,6 +147,7 @@ X account relationships:
 Run this input with `xquik~x-follower-scraper`. Supported relations are
 `followers`, `following`, `verified_followers`, `list_members`,
 `list_followers`, and `community_members`.
+For its current pay-per-event pricing, pass `--max-total-charge-usd`.
 
 Google Maps — "coffee shops in Austin":
 ```bash
@@ -151,7 +156,7 @@ python3 ~/.hermes/skills/apify-actor-finder/scripts/run_actor.py \
   "$APIFY_API_KEY" \
   "compass~crawler-google-places" \
   '{"searchStringsArray": ["coffee shops in Austin TX"], "maxCrawledPlacesPerSearch": 20, "proxyConfig": {"useApifyProxy": true}}' \
-  --output ~/coffee_austin.csv --timeout 300 --max-items 100
+  --output ~/coffee_austin.csv --timeout 300 --max-total-charge-usd {approved_cap}
 ```
 
 Instagram — user-provided profile URL:
@@ -161,7 +166,7 @@ python3 ~/.hermes/skills/apify-actor-finder/scripts/run_actor.py \
   "$APIFY_API_KEY" \
   "apify~instagram-scraper" \
   '{"directUrls": ["https://www.instagram.com/nasa/"], "resultsLimit": 50}' \
-  --output ~/nasa_instagram.csv --timeout 300 --max-items 100
+  --output ~/nasa_instagram.csv --timeout 300 --max-total-charge-usd {approved_cap}
 ```
 
 **Timeout guidance:**
@@ -190,7 +195,7 @@ is `=`, `+`, `-`, or `@` with an apostrophe.
 | Error | Fix |
 |---|---|
 | HTTP 400 on run | Input JSON does not match the actor's schema; re-check `get_actor_info.py` output and correct the fields |
-| Run status `FAILED` | Try a different actor from Step 1 results, or reduce `--max-items` |
+| Run status `FAILED` | Try another Actor or reduce the approved scope |
 | 0 rows in CSV | Actor ran but found nothing; verify search terms with user or try a different actor |
 | Timeout | Increase `--timeout` or reduce the scope of the input |
 

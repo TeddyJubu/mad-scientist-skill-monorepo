@@ -24,6 +24,14 @@ HTTP_TIMEOUT = 30  # 单次 HTTP 请求超时（秒）
 API_BASE = "https://api.apify.com/v2"
 
 
+def positive_item_cap(value):
+    """Parse a positive item cap."""
+    amount = int(value)
+    if amount <= 0:
+        raise argparse.ArgumentTypeError("item cap must be positive")
+    return amount
+
+
 def auth_headers(token, include_content_type=False):
     """Build API headers without placing credentials in URLs."""
     headers = {"Authorization": f"Bearer {token}"}
@@ -56,17 +64,16 @@ def positive_charge_cap(value):
     return format(amount, "f")
 
 
-def start_run(actor_id, run_input, token, max_total_charge_usd=None):
+def start_run(actor_id, run_input, token, run_options):
     """启动 Actor Run"""
+    if set(run_options) not in ({"maxItems"}, {"maxTotalChargeUsd"}):
+        raise ValueError("set exactly one pricing-specific run cap")
     url = f"{API_BASE}/actors/{actor_id.replace('/', '~')}/runs"
-    params = {}
-    if max_total_charge_usd is not None:
-        params["maxTotalChargeUsd"] = max_total_charge_usd
     resp = requests.post(
         url,
         json=run_input,
         headers=auth_headers(token, include_content_type=True),
-        params=params,
+        params=run_options,
         timeout=HTTP_TIMEOUT,
     )
     resp.raise_for_status()
@@ -153,7 +160,7 @@ def get_dataset(dataset_id, token):
     return resp.json()
 
 
-def probe(actor_id, run_input, token, max_total_charge_usd=None):
+def probe(actor_id, run_input, token, run_options):
     """
     小批量试跑验证
     返回 (success: bool, message: str)
@@ -164,7 +171,7 @@ def probe(actor_id, run_input, token, max_total_charge_usd=None):
             actor_id,
             run_input,
             token,
-            max_total_charge_usd,
+            run_options,
         )
     except requests.HTTPError as e:
         return False, f"启动失败: {e.response.status_code} {e.response.text[:200]}"
@@ -193,15 +200,15 @@ def run_batch(
     actor_id,
     run_input,
     token,
+    run_options,
     timeout=DEFAULT_TIMEOUT,
-    max_total_charge_usd=None,
 ):
     """执行单批"""
     run_id, dataset_id = start_run(
         actor_id,
         run_input,
         token,
-        max_total_charge_usd,
+        run_options,
     )
     try:
         status = poll_run(run_id, token, timeout=timeout)
@@ -260,11 +267,16 @@ def main():
     parser.add_argument(
         "--timeout", type=int, default=DEFAULT_TIMEOUT, help="单批超时秒数"
     )
-    parser.add_argument(
+    run_cap = parser.add_mutually_exclusive_group(required=True)
+    run_cap.add_argument(
+        "--max-items",
+        type=positive_item_cap,
+        help="按结果付费 Actor 的项目上限",
+    )
+    run_cap.add_argument(
         "--max-total-charge-usd",
         type=positive_charge_cap,
-        default=None,
-        help="每次 Actor Run 的 Apify 最大总费用",
+        help="按事件付费 Actor 的美元上限",
     )
     parser.add_argument(
         "--batch-size", type=int, default=DEFAULT_BATCH_SIZE, help="分批大小"
@@ -279,6 +291,11 @@ def main():
     parser.add_argument("--probe-only", action="store_true", help="仅试跑，不执行全量")
 
     args = parser.parse_args()
+    run_options = (
+        {"maxItems": args.max_items}
+        if args.max_items is not None
+        else {"maxTotalChargeUsd": args.max_total_charge_usd}
+    )
 
     # 加载 Token
     token = args.token or load_token(args.config, args.token_name)
@@ -311,7 +328,7 @@ def main():
             args.actor_id,
             probe_input,
             token,
-            args.max_total_charge_usd,
+            run_options,
         )
         if args.probe_only:
             result = {
@@ -356,8 +373,8 @@ def main():
                 args.actor_id,
                 batch_input,
                 token,
+                run_options,
                 args.timeout,
-                args.max_total_charge_usd,
             )
         except requests.HTTPError as e:
             print(f"  ❌ 批次 {i} 失败: {e.response.status_code}", file=sys.stderr)

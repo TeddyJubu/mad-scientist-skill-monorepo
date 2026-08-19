@@ -116,9 +116,9 @@ Use `relation` for one relationship. Use `relations` for several.
 
 ### Step 5: Review Cost, Confirm, Then Probe
 
-Show the user the selected Actor, targets, input, and result cap. Review the
-Actor's current Apify pricing. Get explicit approval before any probe or full
-run. Probe runs can incur charges.
+Show the selected Actor, targets, input, result cap, and current pricing. Choose
+`--max-items` only for pay-per-result pricing. Choose `--max-total-charge-usd`
+only for pay-per-event pricing. Get approval before any paid run or probe.
 
 Test with minimal input before committing to full run:
 
@@ -126,10 +126,11 @@ Test with minimal input before committing to full run:
 python3 scripts/apify_runner.py {actor_id} \
   --input '{...}' \
   --probe-only \
-  --max-total-charge-usd {approved_usd_cap} \
+  {pricing_cap_flag} {approved_cap} \
   --list-key {key}
 ```
 
+Both Xquik Actors currently require `--max-total-charge-usd`.
 The probe automatically uses the first 2 items from the list field.
 It also lowers existing `maxItems` and `maxItemsPerTarget` values to 2.
 
@@ -148,7 +149,7 @@ python3 scripts/apify_runner.py {actor_id} \
   --output /path/to/results.json \
   --list-key {key} \
   --batch-size 50 \
-  --max-total-charge-usd {approved_usd_cap} \
+  {pricing_cap_flag} {approved_cap} \
   --probe
 ```
 
@@ -158,7 +159,8 @@ python3 scripts/apify_runner.py {actor_id} \
 | `--list-key` | Field in run_input containing the list to batch | None (no batching) |
 | `--batch-size` | Items per batch | 50 |
 | `--timeout` | Per-batch timeout (seconds) | 600 |
-| `--max-total-charge-usd` | Apify hard charge cap for each run | None |
+| `--max-items` | Pay-per-result run ceiling | Required alternative |
+| `--max-total-charge-usd` | Pay-per-event USD ceiling | Required alternative |
 | `--probe` | Run probe before full execution | Off |
 | `--output` | Save results to JSON file | Stdout |
 | `--config` | Path to config.json for token lookup | None |

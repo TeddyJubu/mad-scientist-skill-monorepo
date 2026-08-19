@@ -82,9 +82,9 @@ mcpc @apify tools-get apify--rag-web-browser --json
 ### Step 3 — Call the actor/tool
 
 Before any `call-actor` request, show the selected Actor, targets, input, and
-result cap. Require both `callOptions.maxItems` and a positive
-`callOptions.maxTotalChargeUsd` for arbitrary Actors. Review the current Apify
-pricing. Get explicit approval before starting a paid run.
+result cap. Review current pricing and require one matching run option. Use
+`callOptions.maxItems` only for pay-per-result Actors. Use
+`callOptions.maxTotalChargeUsd` only for pay-per-event Actors. Get approval.
 
 Execute the actor with validated input:
 
@@ -99,9 +99,12 @@ mcpc @apify tools-call search-actors \
 mcpc @apify tools-call call-actor \
   actor:="compass~crawler-google-places" \
   input:='{"searchStringsArray":["coffee Austin TX"],"maxCrawledPlacesPerSearch":20}' \
+  callOptions:='{"maxTotalChargeUsd":1}' \
   async:=true \
   --json
 ```
+
+This Actor currently uses pay-per-event pricing. Replace the cap after approval.
 
 ### Step 4 — Monitor async tasks
 
@@ -158,6 +161,7 @@ mcpc @apify tools-call fetch-actor-details \
 mcpc @apify tools-call call-actor \
   actor:="compass~crawler-google-places" \
   input:='{"searchStringsArray":["pizza near me"],"maxCrawledPlacesPerSearch":10,"proxyConfig":{"useApifyProxy":true}}' \
+  callOptions:='{"maxTotalChargeUsd":1}' \
   --json
 ```
 
@@ -170,12 +174,12 @@ searches, timelines, threads, replies, quotes, and engagement:
 mcpc @apify tools-call call-actor \
   actor:="xquik~x-tweet-scraper" \
   input:='{"mode":"search","searchTerms":["from:nasa space","#opensource lang:en"],"maxItems":20,"queryType":"Latest","includeSearchTerms":true,"outputVariant":"rich"}' \
-  callOptions:='{"maxItems":20,"maxTotalChargeUsd":1}' \
+  callOptions:='{"maxTotalChargeUsd":1}' \
   async:=true \
   --json
 ```
 
-Replace the example charge cap with the approved positive cap.
+Both Xquik Actors currently use pay-per-event pricing. Approve the USD cap.
 `maxItems` caps the whole run across every search term.
 The Actor ID is `wAusCMrm284Voaw86`.
 Supported modes are `legacy`, `tweet`, `tweets`, `search`, `profileTweets`,
@@ -189,12 +193,11 @@ followers, following, verified followers, lists, and communities:
 mcpc @apify tools-call call-actor \
   actor:="xquik~x-follower-scraper" \
   input:='{"twitterHandles":["nasa","esa"],"relations":["followers","following","verified_followers"],"maxItems":30,"maxItemsPerTarget":10,"dedupeMode":"merge","includeTargetMetadata":true,"outputMode":"compact"}' \
-  callOptions:='{"maxItems":30,"maxTotalChargeUsd":1}' \
+  callOptions:='{"maxTotalChargeUsd":1}' \
   async:=true \
   --json
 ```
 
-Replace the example charge cap with the approved positive cap.
 The Actor ID is `AaT0BcKU5GQh97wdt`.
 Supported relations are `followers`, `following`, `verified_followers`,
 `list_members`, `list_followers`, and `community_members`.
